@@ -7,19 +7,21 @@ import (
 	"encoding/hex"
 	"fmt"
 	"i2c"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
-	fmt.Println("Orientation Sensor Test")
+	fmt.Println("Orientation Sensor Test1")
 	const (
-		defaultOffsets = "f6ffbcff07003801830077ffffffffff0000e8036d01"
+		defaultOffsets = "efffb8ff0a00c400c10055ff000000000100e8038c02"
 	)
-
 	var (
 		status  bno055.StatusBNO055
 		caldata bno055.CalbrBNO055
-		euler   bno055.VecBNO055
 	)
+
 	rawOffsets, err := hex.DecodeString(defaultOffsets)
 	if err != nil {
 		fmt.Println(err)
@@ -37,6 +39,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+	defer bno.Close()
 
 	bno.SetSensorOffsets(rawOffsets[:])
 
@@ -84,6 +87,7 @@ func main() {
 	case !cali:
 		fmt.Println("Bno055 is not Calibrated")
 	}
+
 	/*
 		Rotation angle Range (Android format) Range (Windows format)
 		Pitch +180° to -180° (turning
@@ -93,14 +97,26 @@ func main() {
 		Roll -90° to +90° (increasing with increasing inclination)
 		Heading / Yaw 0° to 360° (turning clockwise increases values)
 	*/
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	mesureChan, errorChan := bno.GetListenChan()
+
 	fmt.Println("\n------------EulerAngles------------")
 	for {
-		err = bno.GetVector(&euler, bno055.VectorEuler)
-		if err != nil {
+		select {
+		case <-sigs:
+			cali, err = bno.GetSensorOffsets(rawOffsets[:])
+			fmt.Printf("\n\nCalibration offsets  :  %#x\n", rawOffsets)
+			return
+		case v := <-mesureChan:
+			fmt.Printf("\rHeading:%8.3f \tRoll: %10.3f \tPitch: %10.3f",
+				v.Heading, v.Roll, v.Pitch)
+		case err := <-errorChan:
+			fmt.Println("\n\nSome Error:")
 			fmt.Println(err)
 			return
+
 		}
-		fmt.Printf("\rHeading:%8.3f \tRoll: %10.3f \tPitch: %10.3f", euler.X, euler.Y, euler.Z)
-		bno.Delay()
 	}
 }

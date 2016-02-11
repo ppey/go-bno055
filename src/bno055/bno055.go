@@ -8,25 +8,6 @@ import (
 	"time"
 )
 
-const (
-	// ModeNodf sdasd
-	ModeNodf = operationModeNdof
-	// ModeCofig fgffggfgf
-	ModeCofig = operationModeConfig
-	// VectorAccelerometer zgou
-	VectorAccelerometer = bno055AccelDataXLsbAddr
-	// VectorMagnetometer juh
-	VectorMagnetometer = bno055MagDataXLsbAddr
-	// VectorGyroscope uhu
-	VectorGyroscope = bno055GyroDataXLsbAddr
-	// VectorEuler kj
-	VectorEuler = bno055EulerHLsbAddr
-	// VectorLinearaccel juh
-	VectorLinearaccel = bno055LinearAccelDataXLsbAddr
-	// VectorGravity jk
-	VectorGravity = bno055GravityDataXLsbAddr
-)
-
 // BNO055 absoulute orientation sensor
 // LSM303 represents a LSM303 magnetometer.
 type BNO055 struct {
@@ -102,7 +83,12 @@ func New(bus *i2c.I2C) (*BNO055, error) {
 	return bno, err
 }
 
-// Init initializes the sensor
+// Close blaa
+func (bno *BNO055) Close() {
+	bno.i2cbus.Close()
+}
+
+// Init blöaa
 func (bno *BNO055) Init(mode uint) error {
 
 	errCout := 0
@@ -319,13 +305,66 @@ type VecBNO055 struct {
 	X, Y, Z float32
 }
 
+// AhrsHRP Ve
+type AhrsHRP struct {
+	Heading, Roll, Pitch float32
+}
+
+func (v *VecBNO055) toAhrsHRP(ahr *AhrsHRP) {
+	ahr.Heading = v.X
+	//	if v.Z < 0 && ahr.Roll < 0 {
+	//		ahr.Roll = v.Y - 90
+	//	} else if v.Z < 0 && ahr.Roll > 0 {
+	//		ahr.Roll = v.Y + 90
+	//	} else {
+	ahr.Roll = v.Y
+	//}
+	ahr.Pitch = v.Z
+
+}
+
+// GetListenChan blaaa
+func (bno *BNO055) GetListenChan() (chan (AhrsHRP), chan (error)) {
+	mesureChan := make(chan AhrsHRP, 1)
+	errorChan := make(chan error, 1)
+	var euler VecBNO055
+	var ahr AhrsHRP
+
+	go func() {
+		for {
+			if err := bno.GetVector(&euler, VectorEuler); err != nil {
+				errorChan <- err
+				return
+			}
+			euler.toAhrsHRP(&ahr)
+			mesureChan <- ahr
+			bno.Delay()
+		}
+	}()
+	return mesureChan, errorChan
+}
+
+// Use this constants as vectorType for GetVector
+const (
+	// ModeNodf sdasd
+	ModeNodf = operationModeNdof
+	// ModeCofig fgffggfgf
+	ModeCofig = operationModeConfig
+	// VectorAccelerometer zgou
+	VectorAccelerometer = bno055AccelDataXLsbAddr
+	// VectorMagnetometer juh
+	VectorMagnetometer = bno055MagDataXLsbAddr
+	// VectorGyroscope uhu
+	VectorGyroscope = bno055GyroDataXLsbAddr
+	// VectorEuler kj
+	VectorEuler = bno055EulerHLsbAddr
+	// VectorLinearaccel juh
+	VectorLinearaccel = bno055LinearAccelDataXLsbAddr
+	// VectorGravity jk
+	VectorGravity = bno055GravityDataXLsbAddr
+)
+
 //GetVector Gets a vector reading from the specified source
-//vectorAccelerometer vecType = bno055AccelDataXLsbAddr
-//vectorMagnetometer  vecType = bno055MagDataXLsbAddr
-//vectorGyroscope     vecType = bno055GyroDataXLsbAddr
-//vectorEuler         vecType = bno055EulerHLsbAddr
-//vectorLinearaccel  vecType = bno055LinearAccelDataXLsbAddr
-//vectorGravity      vecType = bno055GravityDataXLsbAddr
 func (bno *BNO055) GetVector(xyz *VecBNO055, vectorType byte) error {
 	var (
 		x, y, z int16
